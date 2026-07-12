@@ -2,6 +2,11 @@ const Reservation = require('../models/Reservation');
 const Table = require('../models/Table');
 const User = require('../models/User');
 
+const normalizeDate = (dateStr) => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+};
+
 const getAllReservations = async (req, res, next) => {
   try {
     const reservations = await Reservation.find()
@@ -17,14 +22,12 @@ const getAllReservations = async (req, res, next) => {
 
 const getReservationsByDate = async (req, res, next) => {
   try {
-    const date = new Date(req.params.date);
-    if (isNaN(date.getTime())) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.date)) {
       return res.status(400).json({ message: 'Invalid date format. Use YYYY-MM-DD.' });
     }
-    date.setHours(0, 0, 0, 0);
-
+    const date = normalizeDate(req.params.date);
     const nextDay = new Date(date);
-    nextDay.setDate(nextDay.getDate() + 1);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
 
     const reservations = await Reservation.find({
       reservationDate: { $gte: date, $lt: nextDay },
@@ -52,16 +55,13 @@ const updateReservation = async (req, res, next) => {
     if (guestCount) reservation.guestCount = guestCount;
 
     const newTimeSlot = timeSlot || reservation.timeSlot;
-    const newDate = reservationDate ? new Date(reservationDate) : reservation.reservationDate;
+    const newDate = reservationDate ? normalizeDate(reservationDate) : reservation.reservationDate;
 
     if (timeSlot || reservationDate) {
-      const dateForCheck = new Date(newDate);
-      dateForCheck.setHours(0, 0, 0, 0);
-
       const conflict = await Reservation.findOne({
         _id: { $ne: reservation._id },
         table: reservation.table,
-        reservationDate: dateForCheck,
+        reservationDate: newDate,
         timeSlot: newTimeSlot,
         reservationStatus: { $ne: 'cancelled' },
       });
@@ -71,8 +71,8 @@ const updateReservation = async (req, res, next) => {
       }
     }
 
-    if (reservationDate) reservation.reservationDate = new Date(reservationDate);
-    if (timeSlot) reservation.timeSlot = timeSlot;
+    if (reservationDate) reservation.reservationDate = newDate;
+    if (timeSlot) reservation.timeSlot = newTimeSlot;
 
     await reservation.save();
 
@@ -100,16 +100,10 @@ const deleteReservation = async (req, res, next) => {
 
 const getDashboardStats = async (req, res, next) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const todayStart = new Date(today);
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(today);
-    todayEnd.setHours(23, 59, 59, 999);
+    const now = new Date();
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const todayEnd = new Date(todayStart);
+    todayEnd.setUTCDate(todayEnd.getUTCDate() + 1);
 
     const [
       totalReservations,
@@ -121,7 +115,7 @@ const getDashboardStats = async (req, res, next) => {
     ] = await Promise.all([
       Reservation.countDocuments(),
       Reservation.countDocuments({
-        reservationDate: { $gte: todayStart, $lte: todayEnd },
+        reservationDate: { $gte: todayStart, $lt: todayEnd },
         reservationStatus: { $ne: 'cancelled' },
       }),
       Table.countDocuments({ status: 'available' }),

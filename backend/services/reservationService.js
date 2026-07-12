@@ -1,9 +1,30 @@
 const Table = require('../models/Table');
 const Reservation = require('../models/Reservation');
 
+const normalizeDate = (dateStr) => {
+  const str = (typeof dateStr === 'string' ? dateStr : String(dateStr)).split('T')[0];
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+};
+
+const getDateRange = (dateStr) => {
+  const start = normalizeDate(dateStr);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
+};
+
+const getReservedTableIdStrings = async (dateStart, dateEnd, timeSlot) => {
+  const ids = await Reservation.find({
+    reservationDate: { $gte: dateStart, $lt: dateEnd },
+    timeSlot,
+    reservationStatus: { $ne: 'cancelled' },
+  }).distinct('table');
+  return ids.map((id) => id.toString());
+};
+
 const createReservation = async (customerId, { reservationDate, timeSlot, guestCount }) => {
-  const date = new Date(reservationDate);
-  date.setHours(0, 0, 0, 0);
+  const { start, end } = getDateRange(reservationDate);
 
   const tables = await Table.find({ capacity: { $gte: guestCount }, status: 'available' })
     .sort({ capacity: 1, tableNumber: 1 });
@@ -15,65 +36,51 @@ const createReservation = async (customerId, { reservationDate, timeSlot, guestC
     );
   }
 
-  const reservedTableIds = await Reservation.find({
-    reservationDate: date,
-    timeSlot,
-    reservationStatus: { $ne: 'cancelled' },
-  }).distinct('table');
+  const reservedTableIdStrings = await getReservedTableIdStrings(start, end, timeSlot);
 
-  const availableTable = tables.find((t) => !reservedTableIds.includes(t._id.toString()));
+  const candidates = tables.filter((t) => !reservedTableIdStrings.includes(t._id.toString()));
 
-  if (!availableTable) {
+  if (!candidates.length) {
     throw Object.assign(
       new Error('No tables available for the selected date and time slot. Please choose a different date or time.'),
       { statusCode: 409 }
     );
   }
 
-  try {
-    const reservation = await Reservation.create({
-      customer: customerId,
-      table: availableTable._id,
-      reservationDate: date,
-      timeSlot,
-      guestCount,
-    });
-
-    return reservation.populate(['table', 'customer']);
-  } catch (error) {
-    if (error.code === 11000) {
-      const remainingTables = tables.filter(
-        (t) => t._id.toString() !== availableTable._id.toString()
-      );
-
-      const nextAvailable = remainingTables.find(
-        (t) => !reservedTableIds.includes(t._id.toString())
-      );
-
-      if (!nextAvailable) {
-        throw Object.assign(
-          new Error('No tables available for the selected date and time slot. Please choose a different date or time.'),
-          { statusCode: 409 }
-        );
-      }
-
-      const retryReservation = await Reservation.create({
+  let lastError = null;
+  for (const table of candidates) {
+    try {
+      const reservation = await Reservation.create({
         customer: customerId,
-        table: nextAvailable._id,
-        reservationDate: date,
+        table: table._id,
+        reservationDate: start,
         timeSlot,
         guestCount,
       });
-
-      return retryReservation.populate(['table', 'customer']);
+      return reservation.populate(['table', 'customer']);
+    } catch (error) {
+      lastError = error;
+      if (error.code !== 11000) throw error;
     }
-    throw error;
   }
+
+  throw Object.assign(
+    new Error(
+      lastError
+        ? 'No tables available for the selected date and time slot. Please choose a different date or time.'
+        : `No available table with capacity for ${guestCount} guests. The largest table seats 8 guests.`
+    ),
+    { statusCode: 409 }
+  );
 };
 
 const getAvailableSlots = async (reservationDate, guestCount) => {
-  const date = new Date(reservationDate);
-  date.setHours(0, 0, 0, 0);
+  const { start, end } = getDateRange(reservationDate);
+
+  const tables = await Table.find({ capacity: { $gte: guestCount }, status: 'available' })
+    .sort({ capacity: 1, tableNumber: 1 });
+
+  if (!tables.length) return [];
 
   const timeSlots = [
     '12:00', '13:00', '14:00', '15:00', '16:00',
@@ -83,17 +90,8 @@ const getAvailableSlots = async (reservationDate, guestCount) => {
   const availableSlots = [];
 
   for (const slot of timeSlots) {
-    const tables = await Table.find({ capacity: { $gte: guestCount }, status: 'available' })
-      .sort({ capacity: 1, tableNumber: 1 });
-
-    const reservedTableIds = await Reservation.find({
-      reservationDate: date,
-      timeSlot: slot,
-      reservationStatus: { $ne: 'cancelled' },
-    }).distinct('table');
-
-    const hasAvailable = tables.some((t) => !reservedTableIds.includes(t._id.toString()));
-
+    const reservedTableIdStrings = await getReservedTableIdStrings(start, end, slot);
+    const hasAvailable = tables.some((t) => !reservedTableIdStrings.includes(t._id.toString()));
     if (hasAvailable) {
       availableSlots.push(slot);
     }

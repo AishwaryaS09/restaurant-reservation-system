@@ -45,11 +45,10 @@ const seedDatabase = async () => {
     ]);
     console.log('6 restaurant tables created');
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
     const reservations = await Reservation.create([
       {
