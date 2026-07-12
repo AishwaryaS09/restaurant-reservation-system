@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { validationResult } = require('express-validator');
 const Reservation = require('../models/Reservation');
 const Table = require('../models/Table');
@@ -17,6 +18,9 @@ const create = async (req, res, next) => {
       reservation,
     });
   } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     next(error);
   }
 };
@@ -35,6 +39,10 @@ const getMyReservations = async (req, res, next) => {
 
 const cancelMyReservation = async (req, res, next) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid reservation ID' });
+    }
+
     const reservation = await Reservation.findOne({
       _id: req.params.id,
       customer: req.user._id,
@@ -65,12 +73,21 @@ const checkAvailability = async (req, res, next) => {
       return res.status(400).json({ message: 'Date and guestCount are required' });
     }
 
-    const availableSlots = await getAvailableSlots(date, parseInt(guestCount));
-    const tables = await Table.find({ capacity: { $gte: parseInt(guestCount) } });
+    const parsedGuestCount = parseInt(guestCount, 10);
+
+    if (isNaN(parsedGuestCount) || parsedGuestCount < 1 || parsedGuestCount > 20) {
+      return res.status(400).json({ message: 'Guest count must be between 1 and 20' });
+    }
+
+    const availableSlots = await getAvailableSlots(date, parsedGuestCount);
+    const suitableTables = await Table.find({
+      capacity: { $gte: parsedGuestCount },
+      status: 'available',
+    }).sort({ capacity: 1, tableNumber: 1 });
 
     res.json({
       availableSlots,
-      suitableTables: tables,
+      suitableTables,
     });
   } catch (error) {
     next(error);

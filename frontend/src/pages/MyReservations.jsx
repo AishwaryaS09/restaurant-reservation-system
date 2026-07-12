@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { reservationAPI } from '../services/api';
 import { ToastContext } from '../context/ToastContext';
@@ -6,6 +6,7 @@ import ConfirmModal from '../components/ui/ConfirmModal';
 
 export default function MyReservations() {
   const { addToast } = useContext(ToastContext);
+  const cancellingRef = useRef(false);
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -27,7 +28,8 @@ export default function MyReservations() {
   }, []);
 
   const handleCancel = async () => {
-    if (!cancelId) return;
+    if (!cancelId || cancellingRef.current) return;
+    cancellingRef.current = true;
     try {
       await reservationAPI.cancel(cancelId);
       setCancelId(null);
@@ -35,6 +37,8 @@ export default function MyReservations() {
       fetchReservations();
     } catch (err) {
       addToast(err.response?.data?.message || 'Failed to cancel', 'error', 'Error');
+    } finally {
+      cancellingRef.current = false;
     }
   };
 

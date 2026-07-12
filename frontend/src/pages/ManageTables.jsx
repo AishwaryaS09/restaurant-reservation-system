@@ -1,10 +1,11 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { tableAPI } from '../services/api';
 import { ToastContext } from '../context/ToastContext';
 import ConfirmModal from '../components/ui/ConfirmModal';
 
 export default function ManageTables() {
   const { addToast } = useContext(ToastContext);
+  const submittingRef = useRef(false);
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -30,6 +31,8 @@ export default function ManageTables() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     try {
       if (editing) {
         await tableAPI.update(editing, {
@@ -48,6 +51,8 @@ export default function ManageTables() {
       fetchTables();
     } catch (err) {
       addToast(err.response?.data?.message || 'Operation failed', 'error', 'Error');
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -62,7 +67,8 @@ export default function ManageTables() {
   };
 
   const handleDelete = async () => {
-    if (!deleteId) return;
+    if (!deleteId || submittingRef.current) return;
+    submittingRef.current = true;
     try {
       await tableAPI.delete(deleteId);
       setDeleteId(null);
@@ -70,6 +76,8 @@ export default function ManageTables() {
       fetchTables();
     } catch (err) {
       addToast(err.response?.data?.message || 'Delete failed', 'error', 'Error');
+    } finally {
+      submittingRef.current = false;
     }
   };
 

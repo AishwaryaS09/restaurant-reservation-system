@@ -39,6 +39,12 @@ const reservationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-reservationSchema.index({ table: 1, reservationDate: 1, timeSlot: 1 });
+reservationSchema.index(
+  { table: 1, reservationDate: 1, timeSlot: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { reservationStatus: { $ne: 'cancelled' } },
+  }
+);
 
 module.exports = mongoose.model('Reservation', reservationSchema);

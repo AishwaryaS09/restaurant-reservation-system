@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { reservationAPI } from '../services/api';
@@ -7,6 +7,7 @@ import ConfirmModal from '../components/ui/ConfirmModal';
 
 export default function CustomerDashboard() {
   const { user } = useContext(AuthContext);
+  const cancellingRef = useRef(false);
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -28,13 +29,16 @@ export default function CustomerDashboard() {
   }, []);
 
   const handleCancel = async () => {
-    if (!cancelId) return;
+    if (!cancelId || cancellingRef.current) return;
+    cancellingRef.current = true;
     try {
       await reservationAPI.cancel(cancelId);
       setCancelId(null);
       fetchReservations();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to cancel');
+    } finally {
+      cancellingRef.current = false;
     }
   };
 

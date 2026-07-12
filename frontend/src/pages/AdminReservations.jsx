@@ -1,10 +1,11 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { adminAPI } from '../services/api';
 import { ToastContext } from '../context/ToastContext';
 import ConfirmModal from '../components/ui/ConfirmModal';
 
 export default function AdminReservations() {
   const { addToast } = useContext(ToastContext);
+  const deletingRef = useRef(false);
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -74,7 +75,8 @@ export default function AdminReservations() {
   };
 
   const handleDelete = async () => {
-    if (!deleteId) return;
+    if (!deleteId || deletingRef.current) return;
+    deletingRef.current = true;
     try {
       await adminAPI.deleteReservation(deleteId);
       setDeleteId(null);
@@ -82,6 +84,8 @@ export default function AdminReservations() {
       handleFilter();
     } catch (err) {
       addToast(err.response?.data?.message || 'Delete failed', 'error', 'Error');
+    } finally {
+      deletingRef.current = false;
     }
   };
 

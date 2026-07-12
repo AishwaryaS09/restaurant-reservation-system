@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { reservationAPI } from '../services/api';
 import { ToastContext } from '../context/ToastContext';
@@ -19,6 +19,7 @@ const TIME_SLOTS = [
 export default function NewReservation() {
   const navigate = useNavigate();
   const { addToast } = useContext(ToastContext);
+  const submittingRef = useRef(false);
   const [form, setForm] = useState({
     reservationDate: '',
     timeSlot: '',
@@ -38,7 +39,7 @@ export default function NewReservation() {
         guestCount: form.guestCount,
       });
       setAvailableSlots(res.data.availableSlots);
-      if (res.data.availableSlots.length === 0 && !errors.noSlots) {
+      if (res.data.availableSlots.length === 0) {
         setErrors((prev) => ({ ...prev, noSlots: 'No time slots available for this date and guest count.' }));
       } else {
         setErrors((prev) => {
@@ -61,7 +62,7 @@ export default function NewReservation() {
     const errs = {};
     if (!form.reservationDate) errs.reservationDate = 'Please select a date';
     if (!form.guestCount || parseInt(form.guestCount) < 1) errs.guestCount = 'Guest count must be at least 1';
-    if (parseInt(form.guestCount) > 20) errs.guestCount = 'Maximum 20 guests allowed';
+    else if (parseInt(form.guestCount) > 20) errs.guestCount = 'Maximum 20 guests allowed';
     if (!form.timeSlot) errs.timeSlot = 'Please select a time slot';
     if (form.reservationDate) {
       const date = new Date(form.reservationDate);
@@ -75,13 +76,17 @@ export default function NewReservation() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submittingRef.current) return;
     if (!validate()) return;
+
+    submittingRef.current = true;
     setSubmitting(true);
+
     try {
       const res = await reservationAPI.create({
         reservationDate: form.reservationDate,
         timeSlot: form.timeSlot,
-        guestCount: parseInt(form.guestCount),
+        guestCount: parseInt(form.guestCount, 10),
       });
       addToast(
         `Table #${res.data.reservation.table?.tableNumber} reserved for ${form.timeSlot}:00 on ${new Date(form.reservationDate).toLocaleDateString()}`,
@@ -90,9 +95,19 @@ export default function NewReservation() {
       );
       setTimeout(() => navigate('/reservations/my'), 1500);
     } catch (err) {
+      const status = err.response?.status;
       const msg = err.response?.data?.message || 'Failed to create reservation';
-      addToast(msg, 'error', 'Reservation Failed');
+
+      if (status === 409) {
+        addToast(msg, 'warning', 'Slot Unavailable');
+        setAvailableSlots([]);
+        setForm((prev) => ({ ...prev, timeSlot: '' }));
+        checkAvailability();
+      } else {
+        addToast(msg, 'error', 'Reservation Failed');
+      }
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -137,6 +152,7 @@ export default function NewReservation() {
                         value={form.guestCount}
                         min="1"
                         max="20"
+                        step="1"
                         placeholder="1-20"
                         onChange={(e) => setForm({ ...form, guestCount: e.target.value, timeSlot: '' })}
                         required
@@ -172,7 +188,7 @@ export default function NewReservation() {
                               onClick={() => {
                                 setForm({ ...form, timeSlot: slot.value });
                                 setErrors((prev) => {
-                                  const { timeSlot, ...rest } = prev;
+                                  const { timeSlot, noSlots, ...rest } = prev;
                                   return rest;
                                 });
                               }}

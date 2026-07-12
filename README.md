@@ -81,6 +81,9 @@ PORT=5000
 MONGO_URI=mongodb+srv://<user>:<password>@cluster.xxxxx.mongodb.net/restaurant_reservation?retryWrites=true&w=majority
 JWT_SECRET=your_super_secret_jwt_key_change_in_production
 JWT_EXPIRES_IN=7d
+
+# For production deployment on Render, add the frontend URL for CORS:
+FRONTEND_URL=https://your-frontend.vercel.app
 ```
 
 ### Frontend (`frontend/.env`)
@@ -88,6 +91,8 @@ JWT_EXPIRES_IN=7d
 ```
 VITE_API_URL=http://localhost:5000
 ```
+
+For production deployment on Vercel, set `VITE_API_URL` to your Render backend URL and `FRONTEND_URL` (in backend) to your Vercel frontend URL.
 
 For production, set `VITE_API_URL` to your deployed backend URL.
 
