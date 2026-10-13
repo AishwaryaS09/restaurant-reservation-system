@@ -28,6 +28,15 @@ pipeline {
             }
         }
 
+        
+        stage('Run Backend Tests') {
+            steps {
+                dir('backend') {
+                    sh 'npm test'
+                }
+            }
+        }
+
         stage('Install Frontend Dependencies') {
             steps {
                 dir('frontend') {
