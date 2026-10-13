@@ -2,6 +2,10 @@
 pipeline {
     agent any
 
+    tools {
+        nodejs 'NodeJS-22'
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -9,40 +13,54 @@ pipeline {
             }
         }
 
-        stage('Verify Project Structure') {
+        stage('Verify Node.js') {
             steps {
-                sh '''
-                    test -f backend/package.json
-                    test -f frontend/package.json
-                    echo "DineSync project structure verified"
-                '''
+                sh 'node --version'
+                sh 'npm --version'
             }
         }
 
-        stage('Verify Docker Configuration') {
+        stage('Install Backend Dependencies') {
             steps {
-                sh '''
-                    test -f backend/Dockerfile
-                    test -f frontend/Dockerfile
-                    test -f compose.yaml
-                    echo "Docker configuration files verified"
-                '''
+                dir('backend') {
+                    sh 'npm ci'
+                }
             }
         }
 
-        stage('Verify Git Commit') {
+        stage('Install Frontend Dependencies') {
             steps {
-                sh 'git log -1 --oneline'
+                dir('frontend') {
+                    sh 'npm ci'
+                }
+            }
+        }
+
+        stage('Build React Frontend') {
+            steps {
+                dir('frontend') {
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        stage('Verify Build Output') {
+            steps {
+                sh '''
+                    test -f frontend/dist/index.html
+                    echo "React frontend build verified!"
+                '''
             }
         }
     }
 
     post {
         success {
-            echo 'DineSync CI validation completed successfully!'
+            echo 'DineSync CI build completed successfully!'
         }
+
         failure {
-            echo 'DineSync CI validation failed.'
+            echo 'DineSync CI build failed. Check console output.'
         }
     }
 }
