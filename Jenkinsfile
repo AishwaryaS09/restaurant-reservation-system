@@ -1,11 +1,9 @@
 
 pipeline {
-    agent any
-
-    tools {
-        nodejs 'NodeJS-22'
+    agent {
+        label 'dinesync-agent'
     }
-
+    
     stages {
         stage('Checkout') {
             steps {
