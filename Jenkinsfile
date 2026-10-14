@@ -87,7 +87,20 @@ stage('Verify Docker Images') {
         '''
     }
 }
+stage('Build Kubernetes Images') {
+    steps {
+        sh '''
+            docker build -t dinesync-backend:cd ./backend
 
+            docker build \
+                -f frontend/Dockerfile.k8s \
+                -t dinesync-frontend:cd \
+                ./frontend
+
+            echo "Kubernetes Docker images built successfully!"
+        '''
+    }
+}
     }
 
     post {
