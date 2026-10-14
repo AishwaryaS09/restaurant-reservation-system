@@ -90,14 +90,75 @@ stage('Verify Docker Images') {
 stage('Build Kubernetes Images') {
     steps {
         sh '''
-            docker build -t dinesync-backend:cd ./backend
+            set -e
+
+            docker build -t dinesync-backend:build-${BUILD_NUMBER} ./backend
 
             docker build \
                 -f frontend/Dockerfile.k8s \
-                -t dinesync-frontend:cd \
+                -t dinesync-frontend:build-${BUILD_NUMBER} \
                 ./frontend
 
-            echo "Kubernetes Docker images built successfully!"
+            echo "Versioned Kubernetes images built!"
+        '''
+    }
+}
+stage('Load Images into Minikube') {
+    steps {
+        sh '''#!/bin/bash
+    set -eo pipefail
+
+            docker save dinesync-backend:build-${BUILD_NUMBER} |
+                docker exec -i --user root minikube \
+                ctr -n k8s.io images import -
+
+            docker save dinesync-frontend:build-${BUILD_NUMBER} |
+                docker exec -i --user root minikube \
+                ctr -n k8s.io images import -
+
+            echo "Versioned images loaded into Minikube!"
+        '''
+    }
+}
+stage('Deploy to Kubernetes') {
+    steps {
+        sh '''
+            set -e
+
+            KUBECTL="/var/lib/minikube/binaries/v1.37.0/kubectl"
+            KUBECONFIG="/etc/kubernetes/admin.conf"
+
+            docker exec --user root minikube \
+                "$KUBECTL" --kubeconfig="$KUBECONFIG" \
+                set image deployment/dinesync-backend \
+                backend=dinesync-backend:build-${BUILD_NUMBER}
+
+            docker exec --user root minikube \
+                "$KUBECTL" --kubeconfig="$KUBECONFIG" \
+                set image deployment/dinesync-frontend \
+                frontend=dinesync-frontend:build-${BUILD_NUMBER}
+
+            echo "Kubernetes deployment images updated!"
+        '''
+    }
+}
+stage('Verify Kubernetes Deployment') {
+    steps {
+        sh '''
+            set -e
+
+            KUBECTL="/var/lib/minikube/binaries/v1.37.0/kubectl"
+            KUBECONFIG="/etc/kubernetes/admin.conf"
+
+            docker exec --user root minikube \
+                "$KUBECTL" --kubeconfig="$KUBECONFIG" \
+                rollout status deployment/dinesync-backend --timeout=180s
+
+            docker exec --user root minikube \
+                "$KUBECTL" --kubeconfig="$KUBECONFIG" \
+                rollout status deployment/dinesync-frontend --timeout=180s
+
+            echo "Both Kubernetes deployments are healthy!"
         '''
     }
 }
