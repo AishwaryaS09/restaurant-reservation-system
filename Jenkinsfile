@@ -59,6 +59,35 @@ pipeline {
                 '''
             }
         }
+        
+stage('Verify Docker Access') {
+    steps {
+        sh 'docker version'
+    }
+}
+
+stage('Build Backend Docker Image') {
+    steps {
+        sh 'docker build -t dinesync-backend:ci ./backend'
+    }
+}
+
+stage('Build Frontend Docker Image') {
+    steps {
+        sh 'docker build -t dinesync-frontend:ci ./frontend'
+    }
+}
+
+stage('Verify Docker Images') {
+    steps {
+        sh '''
+            docker image inspect dinesync-backend:ci
+            docker image inspect dinesync-frontend:ci
+            echo "Both Docker images built successfully!"
+        '''
+    }
+}
+
     }
 
     post {
