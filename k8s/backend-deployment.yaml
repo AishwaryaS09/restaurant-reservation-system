@@ -1,0 +1,71 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dinesync-backend
+  labels:
+    app: dinesync-backend
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dinesync-backend
+
+  template:
+    metadata:
+      labels:
+        app: dinesync-backend
+
+    spec:
+      containers:
+        - name: backend
+          image: dinesync-backend:v1
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 5000
+
+          env:
+            - name: PORT
+              value: "5000"
+
+            - name: FRONTEND_URL
+              value: "http://localhost:8080"
+
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: dinesync-secrets
+                  key: mongo-uri
+
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: dinesync-secrets
+                  key: jwt-secret
+
+            - name: JWT_EXPIRES_IN
+              value: "7d"
+
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

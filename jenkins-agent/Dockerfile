@@ -1,4 +1,8 @@
 
+# Get Docker CLI from official Docker image
+FROM docker:cli AS dockercli
+
+# Jenkins inbound agent
 FROM jenkins/inbound-agent:latest-jdk21
 
 USER root
@@ -15,5 +19,8 @@ RUN apt-get update && \
     apt-get update && \
     apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
+
+# Copy Docker CLI into Jenkins agent
+COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 
 USER jenkins

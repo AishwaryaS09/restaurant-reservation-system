@@ -1,0 +1,19 @@
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: dinesync-backend
+  labels:
+    app: dinesync-backend
+
+spec:
+  type: ClusterIP
+
+  selector:
+    app: dinesync-backend
+
+  ports:
+    - name: http
+      protocol: TCP
+      port: 5000
+      targetPort: 5000
